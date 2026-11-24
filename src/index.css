@@ -1,0 +1,564 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f4f1ea;
+  --ink: #141414;
+  --mute: #86827a;
+  --line: rgba(20, 20, 20, 0.1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+/* Warm paper grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.38  0 0 0 0 0.27  0 0 0 0 0.16  0 0 0 0.22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23grain)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* Stage & 3D Book Physics */
+#stage {
+  position: fixed;
+  inset: 0;
+  perspective: 1900px;
+  touch-action: none;
+  pointer-events: none;
+  z-index: 20;
+  overflow: hidden;
+}
+
+#stage-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  touch-action: none;
+  cursor: default;
+}
+
+.book-shadow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--w);
+  height: var(--h);
+  border-radius: 6px;
+  background: rgba(58, 44, 28, 0.34);
+  filter: blur(16px);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.book {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--w);
+  height: var(--h);
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transform-style: preserve-3d;
+  pointer-events: auto;
+  cursor: grab;
+  will-change: transform, opacity;
+  outline: none;
+}
+
+.book:focus-visible .cv {
+  box-shadow: 0 0 0 3px var(--ink), inset 0 0 0 1px rgba(20, 20, 20, 0.12);
+}
+
+.book.is-dragging {
+  cursor: grabbing;
+}
+
+.b3d {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  display: block;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.face {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--w);
+  height: var(--h);
+  margin-left: calc(var(--w) / -2);
+  margin-top: calc(var(--h) / -2);
+  display: block;
+}
+
+.front {
+  transform-style: preserve-3d;
+  transform-origin: left center;
+  transform: translateZ(calc(var(--d) / 2)) rotateY(calc(var(--open, 0) * -158deg));
+  border-radius: 2px 5px 5px 2px;
+}
+
+.cv {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 2px 5px 5px 2px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.08);
+}
+
+.cv img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Hinge crease 1.6% wide at 3.2% from left */
+.cv::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3.2%;
+  width: 1.6%;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.24) 0%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(0, 0, 0, 0.09) 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Moving specular sheen translated by --gx */
+.cv::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(
+    115deg,
+    transparent 36%,
+    rgba(255, 255, 255, 0.36) 49%,
+    rgba(255, 255, 255, 0.06) 56%,
+    transparent 66%
+  );
+  mix-blend-mode: soft-light;
+  transform: translateX(var(--gx, 0px));
+  pointer-events: none;
+  z-index: 3;
+}
+
+.inside {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 5px 2px 2px 5px;
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: inset -8px 0 16px rgba(0, 0, 0, 0.14);
+}
+
+.page1 {
+  transform: translateZ(calc(var(--d) / 2 - 1.5px));
+  background: #fbf8f1;
+  border-radius: 2px 4px 4px 2px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow:
+    inset 14px 0 20px -10px rgba(20, 20, 20, 0.18),
+    inset 0 0 0 1px rgba(20, 20, 20, 0.06);
+  padding: calc(var(--w) * 0.11) calc(var(--w) * 0.1) calc(var(--w) * 0.09) calc(var(--w) * 0.13);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--ink);
+}
+
+.page1-kicker {
+  font-size: calc(var(--w) * 0.044);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+  font-weight: 600;
+}
+
+.page1-title {
+  font-family: 'Inter Tight', sans-serif;
+  font-weight: 600;
+  font-size: calc(var(--w) * 0.105);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  margin-top: calc(var(--w) * 0.05);
+  color: var(--ink);
+}
+
+.page1-note {
+  font-size: calc(var(--w) * 0.052);
+  line-height: 1.45;
+  color: #42403c;
+  margin-top: calc(var(--w) * 0.06);
+}
+
+.page1-foot {
+  border-top: 1px solid var(--line);
+  padding-top: calc(var(--w) * 0.045);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: calc(var(--w) * 0.04);
+  font-size: calc(var(--w) * 0.045);
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+
+.back {
+  transform: translateZ(calc(var(--d) / -2)) rotateY(180deg);
+  border-radius: 5px 2px 2px 5px;
+  box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.08);
+}
+
+.spine {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--d);
+  height: var(--h);
+  margin-left: calc(var(--d) / -2);
+  margin-top: calc(var(--h) / -2);
+  display: block;
+  transform: rotateY(-90deg) translateZ(calc(var(--w) / 2));
+  border-radius: 2px 0 0 2px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.08);
+}
+
+.spine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.24) 0%,
+    rgba(255, 255, 255, 0.04) 40%,
+    rgba(0, 0, 0, 0.2) 100%
+  );
+}
+
+.fore-edge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--d);
+  height: var(--h);
+  margin-left: calc(var(--d) / -2);
+  margin-top: calc(var(--h) / -2);
+  display: block;
+  transform: rotateY(90deg) translateZ(calc(var(--w) / 2 - 1.5px));
+  background: repeating-linear-gradient(90deg, #f3efe6 0 1px, #e3ddd0 1px 2px);
+}
+
+.top-edge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--w);
+  height: var(--d);
+  margin-left: calc(var(--w) / -2);
+  margin-top: calc(var(--d) / -2);
+  display: block;
+  transform: rotateX(90deg) translateZ(calc(var(--h) / 2 - 1.5px));
+  background: repeating-linear-gradient(0deg, #f3efe6 0 1px, #e3ddd0 1px 2px);
+}
+
+.bottom-edge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--w);
+  height: var(--d);
+  margin-left: calc(var(--w) / -2);
+  margin-top: calc(var(--d) / -2);
+  display: block;
+  transform: rotateX(-90deg) translateZ(calc(var(--h) / 2 - 1.5px));
+  background: repeating-linear-gradient(0deg, #f3efe6 0 1px, #e3ddd0 1px 2px);
+}
+
+/* Headline masked entrance & inline 3D mini book */
+.headline-text {
+  font-family: 'Inter Tight', sans-serif;
+  font-weight: 500;
+  font-size: clamp(40px, 5.6vw, 92px);
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  color: var(--ink);
+}
+
+.line-mask {
+  overflow: hidden;
+  display: block;
+  padding-bottom: 0.06em;
+  margin-bottom: -0.06em;
+}
+
+.line-rise {
+  display: block;
+  animation: riseIn 0.85s var(--out) both;
+}
+
+.line-rise-2 {
+  animation-delay: 0.1s;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(105%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Inline Mini 3D Book */
+.mini-book-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -0.11em;
+  width: 0.62em;
+  height: 0.84em;
+  margin: 0 0.14em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  perspective: 420px;
+  transform: rotate(-9deg);
+  transition: transform 0.35s var(--spring);
+}
+
+.mini-book-btn:hover {
+  transform: rotate(-9deg) scale(1.12);
+}
+
+.mini-book-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.mini-book-3d {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: block;
+  transform-style: preserve-3d;
+  transition: transform 0.72s var(--spring);
+}
+
+.mini-book-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px 4px 4px 2px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow:
+    0 6px 14px rgba(20, 20, 20, 0.18),
+    inset 0 0 0 1px rgba(20, 20, 20, 0.12);
+}
+
+.mini-book-face-back {
+  transform: rotateY(180deg);
+}
+
+.mini-book-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Hero Copy transitions (Orbit <-> Grid <-> Focus) */
+.hero-copy {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0 20px;
+}
+
+.hero-copy-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition:
+    transform 0.75s var(--out),
+    opacity 0.4s var(--out);
+  transform-origin: center center;
+}
+
+body.grid-mode .hero-copy-inner {
+  transform: translateY(-21vh) scale(0.56);
+}
+
+body.focus .hero-copy-inner {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+
+body.focus .hero-copy * {
+  pointer-events: none !important;
+}
+
+body.focus .top-bar-fade {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.focus .top-bar-fade * {
+  pointer-events: none !important;
+}
+
+body.focus .corners-bottom {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.focus .corners-bottom * {
+  pointer-events: none !important;
+}
+
+/* CTA arrow hover */
+.cta-pill {
+  height: 46px;
+  transition:
+    transform 0.25s var(--spring),
+    background-color 0.2s ease;
+}
+
+.cta-pill:hover {
+  transform: translateY(-1px);
+}
+
+.cta-pill:hover .cta-arrow {
+  transform: rotate(-45deg);
+}
+
+.cta-arrow {
+  transition: transform 0.28s var(--spring);
+}
+
+/* Focus Panel staggered children */
+.focus-stagger > * {
+  animation: focusFadeUp 0.55s var(--out) both;
+}
+
+.focus-stagger > *:nth-child(1) {
+  animation-delay: 0.06s;
+}
+.focus-stagger > *:nth-child(2) {
+  animation-delay: 0.11s;
+}
+.focus-stagger > *:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.focus-stagger > *:nth-child(4) {
+  animation-delay: 0.21s;
+}
+.focus-stagger > *:nth-child(5) {
+  animation-delay: 0.26s;
+}
+.focus-stagger > *:nth-child(6) {
+  animation-delay: 0.31s;
+}
+
+@keyframes focusFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shelfBump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.shelf-bump {
+  animation: shelfBump 0.42s var(--spring);
+}
+
+/* Responsive (<760px) */
+@media (max-width: 759px) {
+  .headline-text {
+    font-size: 10.2vw;
+  }
+
+  body.grid-mode .hero-copy-inner {
+    transform: translateY(-23vh) scale(0.56);
+  }
+}

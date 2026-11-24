@@ -1,0 +1,8 @@
+{
+  "name": "Remix Folio Room",
+  "description": "An interactive 3D book-orbit digital library of design books for curious creatives.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
